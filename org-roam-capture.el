@@ -186,30 +186,53 @@ See `org-roam-capture-templates' for details on templates.")
   "The Org-roam templates used during a capture from the roam-ref protocol.
 Details on how to specify for the template is given in `org-roam-capture-templates'.")
 
-(defun org-roam-capture--get (keyword)
-  "Gets the value for KEYWORD from the `org-roam-capture-template'."
-  (plist-get (plist-get org-capture-plist :org-roam) keyword))
+(defun org-roam-capture-p ()
+  "Return t if the current capture process is an Org-roam capture.
+This function is to only be called within a capture buffer (has
+`org-capture-mode' enabled)."
+  (plist-get org-capture-current-plist :org-roam))
+
+(defun org-roam-capture--get (keyword &optional local)
+  "Get the value for KEYWORD from the `org-roam-capture-template'.
+When LOCAL is non-nil, get the local value for the current
+buffer."
+  (plist-get (plist-get (if local org-capture-current-plist org-capture-plist) :org-roam) keyword))
 
 (defun org-roam-capture--put (&rest stuff)
-  "Puts properties from STUFF into the `org-roam-capture-template'."
-  (let ((p (plist-get org-capture-plist :org-roam)))
+  "Put properties from STUFF into the `org-roam-capture-template'.
+If the first item in STUFF is `local`, then put the rest of STUFF
+in `org-capture-current-plist' instead."
+  (let* ((local-p (eq (car stuff) 'local))
+         (p (plist-get (if local-p org-capture-current-plist org-capture-plist) :org-roam)))
+    (when local-p
+      (setq stuff (cdr stuff)))
     (while stuff
-      (setq p (plist-put p
-                         (pop stuff) (pop stuff))))
-    (setq org-capture-plist
-          (plist-put org-capture-plist :org-roam p))))
+      (setq p (plist-put p (pop stuff) (pop stuff))))
+    (if local-p
+        (setq org-capture-current-plist
+              (plist-put org-capture-current-plist :org-roam p))
+      (setq org-capture-plist
+              (plist-put org-capture-plist :org-roam p)))))
 
-(defun org-roam-capture--in-process-p ()
-  "Return non-nil if a `org-roam-capture' buffer exists."
-  (cl-some (lambda (buffer)
-             (and (eq (buffer-local-value 'major-mode buffer)
-                      'org-mode)
-                  (plist-get (buffer-local-value 'org-capture-current-plist buffer)
-                             :org-roam)))
-           (buffer-list)))
+(define-minor-mode org-roam-capture-mode
+  "Minor mode for the `org-roam-capture'.
+
+This minor mode is responsible for setting up additional hooks."
+  :lighter " orc"
+  (when (and org-roam-capture-mode
+             (org-roam-capture-p))
+      (when (eq (org-roam-capture--get :capture-fn) 'org-roam-insert)
+          (add-hook 'org-capture-before-finalize-hook
+                    #'org-roam-capture--insert-link-h nil 'local))
+      (when (eq (org-roam-capture--get :capture-fn) 'org-roam-find-file)
+        (add-hook 'org-capture-after-finalize-hook #'org-roam-capture--find-file-h))
+      (add-hook 'org-capture-before-finalize-hook
+                #'org-roam-capture--save-file-maybe-h nil 'local)))
+
+(add-hook 'org-capture-mode-hook #'org-roam-capture-mode)
 
 (defun org-roam-capture--fill-template (str)
-  "Expands the template STR, returning the string.
+  "Expand the template STR, returning the string.
 This is an extension of org-capture's template expansion.
 
 First, it expands ${var} occurrences in STR, using `org-roam-capture--info'.
@@ -226,17 +249,23 @@ Next, it expands the remaining template string using
                         val))) nil)
       (org-capture-fill-template)))
 
+
 (defun org-roam-capture--insert-link-h ()
   "Insert the link into the original buffer, after the capture process is done.
 This is added as a hook to `org-capture-after-finalize-hook'."
   (when (and (not org-note-abort)
-             (eq (org-roam-capture--get :capture-fn)
+             (eq (org-roam-capture--get :capture-fn 'local)
                  'org-roam-insert))
-    (when-let ((region (org-roam-capture--get :region))) ;; Remove previously selected text.
+    (when-let ((region (org-roam-capture--get :region 'local))) ;; Remove previously selected text.
       (delete-region (car region) (cdr region)))
-    (insert (org-roam--format-link (org-roam-capture--get :file-path)
-                                   (org-roam-capture--get :link-description))))
-  (remove-hook 'org-capture-after-finalize-hook #'org-roam-capture--insert-link-h))
+    (let ((path (org-roam-capture--get :file-path 'local))
+          (desc (org-roam-capture--get :link-description 'local)))
+      (when-let ((mkr (org-roam-capture--get :insert-at 'local)))
+        (when (marker-buffer mkr)
+          (if (eq (point) mkr)
+              (insert (org-roam--format-link path desc))
+            (org-with-point-at mkr
+              (insert (org-roam--format-link path desc)))))))))
 
 (defun org-roam-capture--save-file-maybe-h ()
   "Save the file conditionally.
@@ -244,16 +273,15 @@ The file is saved if the original value of :no-save is not t and
 `org-note-abort' is not t. It is added to
 `org-capture-after-finalize-hook'."
   (cond
-   ((and (org-roam-capture--get :new-file)
+   ((and (org-roam-capture--get :new-file 'local)
          org-note-abort)
-    (with-current-buffer (org-capture-get :buffer)
+    (with-current-buffer (org-capture-get :buffer 'local)
       (set-buffer-modified-p nil)
       (kill-buffer)))
-   ((and (not (org-roam-capture--get :orig-no-save))
+   ((and (not (org-roam-capture--get :orig-no-save 'local))
          (not org-note-abort))
-    (with-current-buffer (org-capture-get :buffer)
-      (save-buffer))))
-  (remove-hook 'org-capture-after-finalize-hook #'org-roam-capture--save-file-maybe-h))
+    (with-current-buffer (org-capture-get :buffer 'local)
+      (save-buffer)))))
 
 (defun org-roam-capture--new-file ()
   "Return the path to the new file during an Org-roam capture.
@@ -273,7 +301,7 @@ aborted, we do the following:
 
 2. Set the capture template's :no-save to t.
 
-3. Add a function on `org-capture-after-finalize-hook' that saves
+3. Add a function on `org-capture-before-finalize-hook' that saves
 the file if the original value of :no-save is not t and
 `org-note-abort' is not t."
   (let* ((name-templ (or (org-roam-capture--get :file-name)
@@ -392,7 +420,6 @@ GOTO and KEYS argument have the same functionality as
          org-capture-templates-contexts)
     (when one-template-p
       (setq keys (caar org-capture-templates)))
-    (add-hook 'org-capture-after-finalize-hook #'org-roam-capture--save-file-maybe-h)
     (if (or one-template-p
             (eq org-roam-capture-function 'org-capture))
         (org-capture goto keys)
@@ -404,8 +431,6 @@ GOTO and KEYS argument have the same functionality as
 This uses the templates defined at `org-roam-capture-templates'."
   (interactive)
   (unless org-roam-mode (org-roam-mode))
-  (when (org-roam-capture--in-process-p)
-    (user-error "Nested Org-roam capture processes not supported"))
   (let* ((completions (org-roam--get-title-path-completions))
          (title-with-keys (org-roam-completion--completing-read "File: "
                                                                 completions))
