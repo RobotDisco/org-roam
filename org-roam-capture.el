@@ -214,6 +214,57 @@ in `org-capture-current-plist' instead."
       (setq org-capture-plist
               (plist-put org-capture-plist :org-roam p)))))
 
+(defvar org-roam-capture-post-hook '(org-roam-capture--cleanup)
+  "Hook that is run right after an Org-roam capture process is finalized.
+
+This hook is similar `org-capture-after-finalize-hook', but the
+functions are provided with the local `org-capture-current-plist'
+info by passing it as their argument. Since `org-roam-capture'
+wraps around `org-capture', this is necessary to perform some
+stale-buffer clean-up.")
+
+(defvar org-roam-capture-plist nil
+  "Plist for the current Org-roam capture process.
+
+Global to avoid passing it. See `org-capture-plist' for
+details.")
+
+(defun org-roam-capture--install-post-hook ()
+  "Install `org-roam-capture--run-post-hook'.
+
+This function is meant to be run with
+`org-capture-before-finalize-hook'. See
+`org-roam-capture-post-hook' for details."
+  ;; Store `org-capture-current-plist' in a global variable for retrieval
+  (setq org-roam-capture-plist org-capture-current-plist
+        org-capture-plist org-capture-current-plist)
+  (add-hook 'org-capture-after-finalize-hook #'org-roam-capture--run-post-hook))
+
+(defun org-roam-capture--run-post-hook ()
+  "Run `org-roam-capture-post-hook'.
+
+This function is meant to be run with
+`org-capture-after-finalize-hook', but it should not be set
+globally. Instead, it should be installed by
+`org-roam-capture--install-post-hook'. See
+`org-roam-capture-post-hook' for details."
+  (run-hook-with-args 'org-roam-capture-post-hook org-roam-capture-plist)
+  (remove-hook 'org-capture-after-finalize-hook #'org-roam-capture--run-post-hook)
+  (setq org-roam-capture-plist nil))
+
+(defun org-roam-capture--cleanup (plist)
+  "Kill buffer if `org-roam-capture' was aborted.
+
+PLIST is the value of `org-capture-plist' to use
+
+This function is meant to be run with
+`org-roam-capture-post-hook'."
+  (when org-note-abort
+    (let ((org-capture-plist plist))
+      (with-current-buffer (org-capture-get :buffer)
+        (set-buffer-modified-p nil)
+        (kill-buffer)))))
+
 (define-minor-mode org-roam-capture-mode
   "Minor mode for the `org-roam-capture'.
 
@@ -221,13 +272,15 @@ This minor mode is responsible for setting up additional hooks."
   :lighter " orc"
   (when (and org-roam-capture-mode
              (org-roam-capture-p))
-      (when (eq (org-roam-capture--get :capture-fn) 'org-roam-insert)
-          (add-hook 'org-capture-before-finalize-hook
-                    #'org-roam-capture--insert-link-h nil 'local))
-      (when (eq (org-roam-capture--get :capture-fn) 'org-roam-find-file)
-        (add-hook 'org-capture-after-finalize-hook #'org-roam-capture--find-file-h))
+    (when (eq (org-roam-capture--get :capture-fn) 'org-roam-insert)
       (add-hook 'org-capture-before-finalize-hook
-                #'org-roam-capture--save-file-maybe-h nil 'local)))
+                #'org-roam-capture--insert-link-h nil 'local))
+    (when (eq (org-roam-capture--get :capture-fn) 'org-roam-find-file)
+      (add-hook 'org-capture-after-finalize-hook #'org-roam-capture--find-file-h))
+    (add-hook 'org-capture-before-finalize-hook
+              #'org-roam-capture--save-file-maybe-h nil 'local)
+    (add-hook 'org-capture-prepare-finalize-hook
+              #'org-roam-capture--install-post-hook nil 'local)))
 
 (add-hook 'org-capture-mode-hook #'org-roam-capture-mode)
 
