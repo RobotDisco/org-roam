@@ -396,9 +396,10 @@ This function is used solely in Org-roam's capture templates: see
   "Opens the newly created template file.
 This is added as a hook to `org-capture-after-finalize-hook'.
 Run the hooks defined in `org-roam-capture-after-find-file-hook'."
-  (when-let ((file-path (org-roam-capture--get :file-path)))
-    (org-roam--find-file file-path))
-  (run-hooks 'org-roam-capture-after-find-file-hook)
+  (unless org-note-abort
+    (when-let ((file-path (org-roam-capture--get :file-path)))
+      (org-roam--find-file file-path))
+    (run-hooks 'org-roam-capture-after-find-file-hook))
   (remove-hook 'org-capture-after-finalize-hook #'org-roam-capture--find-file-h))
 
 (defcustom org-roam-capture-after-find-file-hook nil
