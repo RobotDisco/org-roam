@@ -255,6 +255,12 @@ This function is meant to be run with
       (set-buffer-modified-p nil)
       (kill-buffer))))
 
+(defun org-roam-capture--update-plist ()
+  "Update global plist from local var."
+  (setq org-capture-plist org-capture-current-plist))
+
+(advice-add 'org-capture-finalize :before #'org-roam-capture--update-plist)
+
 (define-minor-mode org-roam-capture-mode
   "Minor mode for the `org-roam-capture'.
 
