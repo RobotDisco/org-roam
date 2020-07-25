@@ -252,7 +252,7 @@ Next, it expands the remaining template string using
 
 (defun org-roam-capture--insert-link-h ()
   "Insert the link into the original buffer, after the capture process is done.
-This is added as a hook to `org-capture-after-finalize-hook'."
+This is added as a hook to `org-capture-before-finalize-hook'."
   (when (and (not org-note-abort)
              (eq (org-roam-capture--get :capture-fn 'local)
                  'org-roam-insert))
@@ -260,12 +260,15 @@ This is added as a hook to `org-capture-after-finalize-hook'."
       (delete-region (car region) (cdr region)))
     (let ((path (org-roam-capture--get :file-path 'local))
           (desc (org-roam-capture--get :link-description 'local)))
-      (when-let ((mkr (org-roam-capture--get :insert-at 'local)))
-        (when (marker-buffer mkr)
-          (if (eq (point) mkr)
-              (insert (org-roam--format-link path desc))
-            (org-with-point-at mkr
-              (insert (org-roam--format-link path desc)))))))))
+      (when-let* ((mkr (org-roam-capture--get :insert-at 'local))
+                  (buf (marker-buffer mkr)))
+        (when buf
+          (save-excursion
+            (switch-to-buffer-other-window buf)
+            (if (eq (point) (marker-position mkr))
+                (insert (org-roam--format-link path desc))
+              (org-with-point-at mkr
+                (insert (org-roam--format-link path desc))))))))))
 
 (defun org-roam-capture--save-file-maybe-h ()
   "Save the file conditionally.
