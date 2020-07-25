@@ -223,12 +223,6 @@ info by passing it as their argument. Since `org-roam-capture'
 wraps around `org-capture', this is necessary to perform some
 stale-buffer clean-up.")
 
-(defvar org-roam-capture-plist nil
-  "Plist for the current Org-roam capture process.
-
-Global to avoid passing it. See `org-capture-plist' for
-details.")
-
 (defun org-roam-capture--install-post-hook ()
   "Install `org-roam-capture--run-post-hook'.
 
@@ -236,8 +230,6 @@ This function is meant to be run with
 `org-capture-before-finalize-hook'. See
 `org-roam-capture-post-hook' for details."
   ;; Store `org-capture-current-plist' in a global variable for retrieval
-  (setq org-roam-capture-plist org-capture-current-plist
-        org-capture-plist org-capture-current-plist)
   (add-hook 'org-capture-after-finalize-hook #'org-roam-capture--run-post-hook))
 
 (defun org-roam-capture--run-post-hook ()
@@ -249,8 +241,7 @@ globally. Instead, it should be installed by
 `org-roam-capture--install-post-hook'. See
 `org-roam-capture-post-hook' for details."
   (run-hook-with-args 'org-roam-capture-post-hook org-roam-capture-plist)
-  (remove-hook 'org-capture-after-finalize-hook #'org-roam-capture--run-post-hook)
-  (setq org-roam-capture-plist nil))
+  (remove-hook 'org-capture-after-finalize-hook #'org-roam-capture--run-post-hook))
 
 (defun org-roam-capture--cleanup (plist)
   "Kill buffer if `org-roam-capture' was aborted.
@@ -260,10 +251,9 @@ PLIST is the value of `org-capture-plist' to use.
 This function is meant to be run with
 `org-roam-capture-post-hook'."
   (when org-note-abort
-    (let ((org-capture-plist plist))
-      (with-current-buffer (org-capture-get :buffer)
-        (set-buffer-modified-p nil)
-        (kill-buffer)))))
+    (with-current-buffer (org-capture-get :buffer)
+      (set-buffer-modified-p nil)
+      (kill-buffer))))
 
 (define-minor-mode org-roam-capture-mode
   "Minor mode for the `org-roam-capture'.
