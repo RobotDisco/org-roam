@@ -190,7 +190,7 @@ Details on how to specify for the template is given in `org-roam-capture-templat
   "Return t if the current capture process is an Org-roam capture.
 This function is to only be called within a capture buffer (has
 `org-capture-mode' enabled)."
-  (plist-get org-capture-current-plist :org-roam))
+  (plist-get org-capture-plist :org-roam))
 
 (defun org-roam-capture--get (keyword &optional local)
   "Get the value for KEYWORD from the `org-roam-capture-template'.
