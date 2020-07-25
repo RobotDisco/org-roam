@@ -255,7 +255,7 @@ globally. Instead, it should be installed by
 (defun org-roam-capture--cleanup (plist)
   "Kill buffer if `org-roam-capture' was aborted.
 
-PLIST is the value of `org-capture-plist' to use
+PLIST is the value of `org-capture-plist' to use.
 
 This function is meant to be run with
 `org-roam-capture-post-hook'."
