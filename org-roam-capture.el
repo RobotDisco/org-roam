@@ -214,47 +214,6 @@ in `org-capture-current-plist' instead."
       (setq org-capture-plist
               (plist-put org-capture-plist :org-roam p)))))
 
-(defvar org-roam-capture-post-hook '(org-roam-capture--cleanup)
-  "Hook that is run right after an Org-roam capture process is finalized.
-
-This hook is similar `org-capture-after-finalize-hook', but the
-functions are provided with the local `org-capture-current-plist'
-info by passing it as their argument. Since `org-roam-capture'
-wraps around `org-capture', this is necessary to perform some
-stale-buffer clean-up.")
-
-(defun org-roam-capture--install-post-hook ()
-  "Install `org-roam-capture--run-post-hook'.
-
-This function is meant to be run with
-`org-capture-before-finalize-hook'. See
-`org-roam-capture-post-hook' for details."
-  ;; Store `org-capture-current-plist' in a global variable for retrieval
-  (add-hook 'org-capture-after-finalize-hook #'org-roam-capture--run-post-hook))
-
-(defun org-roam-capture--run-post-hook ()
-  "Run `org-roam-capture-post-hook'.
-
-This function is meant to be run with
-`org-capture-after-finalize-hook', but it should not be set
-globally. Instead, it should be installed by
-`org-roam-capture--install-post-hook'. See
-`org-roam-capture-post-hook' for details."
-  (run-hook-with-args 'org-roam-capture-post-hook org-roam-capture-plist)
-  (remove-hook 'org-capture-after-finalize-hook #'org-roam-capture--run-post-hook))
-
-(defun org-roam-capture--cleanup (plist)
-  "Kill buffer if `org-roam-capture' was aborted.
-
-PLIST is the value of `org-capture-plist' to use.
-
-This function is meant to be run with
-`org-roam-capture-post-hook'."
-  (when org-note-abort
-    (with-current-buffer (org-capture-get :buffer)
-      (set-buffer-modified-p nil)
-      (kill-buffer))))
-
 (defun org-roam-capture--update-plist ()
   "Update global plist from local var."
   (setq org-capture-plist org-capture-current-plist))
@@ -272,11 +231,10 @@ This minor mode is responsible for setting up additional hooks."
       (add-hook 'org-capture-before-finalize-hook
                 #'org-roam-capture--insert-link-h nil 'local))
     (when (eq (org-roam-capture--get :capture-fn) 'org-roam-find-file)
-      (add-hook 'org-capture-after-finalize-hook #'org-roam-capture--find-file-h))
-    (add-hook 'org-capture-before-finalize-hook
+      (add-hook 'org-capture-before-finalize-hook
               #'org-roam-capture--save-file-maybe-h nil 'local)
-    (add-hook 'org-capture-prepare-finalize-hook
-              #'org-roam-capture--install-post-hook nil 'local)))
+      (add-hook 'org-capture-after-finalize-hook
+                #'org-roam-capture--find-file-h))))
 
 (add-hook 'org-capture-mode-hook #'org-roam-capture-mode)
 
@@ -367,8 +325,9 @@ the file if the original value of :no-save is not t and
          (roam-template (concat roam-head org-template)))
     (unless (file-exists-p file-path)
       (make-directory (file-name-directory file-path) t)
-      (org-roam-capture--put :orig-no-save (org-capture-get :no-save)
-                             :new-file t)
+      (org-roam-capture--put :no-save t
+                             :new-file t
+                             :kill-buffer t)
       (org-capture-put :template
                        ;; Fixes org-capture-place-plain-text throwing 'invalid search bound'
                        ;; when both :unnarowed t and "%?" is missing from the template string;
