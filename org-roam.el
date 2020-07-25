@@ -1290,7 +1290,7 @@ nil, or positive. If ARG is `toggle', toggle `org-roam-mode'.
 Otherwise, behave as if called interactively."
   :lighter " Org-roam"
   :keymap  (let ((map (make-sparse-keymap)))
-             (define-key map [remap org-store-link] 'org-roam-store-link)
+             (define-key map [remap org-store-link] #'org-roam-store-link)
              map)
   :group 'org-roam
   :require 'org-roam
